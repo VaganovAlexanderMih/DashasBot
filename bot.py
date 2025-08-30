@@ -1,7 +1,7 @@
 import asyncio
 import os
 from datetime import datetime, timedelta
-from telegram import Update
+from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -57,6 +57,8 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task = asyncio.create_task(repeated_messages())
 
 # Создаем приложение
+bot = Bot(token=TOKEN)
+bot.delete_webhook()
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
