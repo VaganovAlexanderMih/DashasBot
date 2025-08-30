@@ -13,8 +13,8 @@ chat_file = "chat_id.txt"
 time_file = "send_time.txt"
 chat_id = None
 answered = False
-send_hour = 20
-send_minute = 0
+send_hour = 22
+send_minute = 30
 
 # --- Сохраняем/загружаем chat_id ---
 def save_chat_id(cid):
