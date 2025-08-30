@@ -13,8 +13,8 @@ chat_file = "chat_id.txt"
 time_file = "send_time.txt"
 chat_id = None
 answered = False
-send_hour = 22
-send_minute = 35
+send_hour = 20
+send_minute = 0
 
 # --- Сохраняем/загружаем chat_id ---
 def save_chat_id(cid):
@@ -86,7 +86,7 @@ def send_message_job():
 
         sleep_seconds = (target_time - now).total_seconds()
         while sleep_seconds > 0:
-            time.sleep(min(60, sleep_seconds))  # спим максимум минуту, чтобы catch-up обновился
+            time.sleep(min(60, sleep_seconds))  # проверка каждую минуту
             sleep_seconds -= min(60, sleep_seconds)
 
         # повтор каждые 30 минут до ответа
@@ -95,7 +95,7 @@ def send_message_job():
                 bot.send_message(chat_id, MESSAGE_TEXT)
             except Exception as e:
                 print("Ошибка отправки:", e)
-            for _ in range(30*60):  # 30 минут, проверяем каждую секунду
+            for _ in range(30 * 60):  # 30 минут
                 if answered:
                     break
                 time.sleep(1)
@@ -110,7 +110,7 @@ def start(message):
     save_chat_id(chat_id)
     bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
 
-    # Стартуем фоновые потоки только после получения chat_id
+    # Стартуем фоновые потоки
     threading.Thread(target=reset_answered_flag, daemon=True).start()
     threading.Thread(target=send_message_job, daemon=True).start()
 
@@ -139,4 +139,9 @@ def handle_reply(message):
     bot.reply_to(message, "Спасибо за ответ! Бот больше не будет слать сообщения сегодня.")
 
 # --- Запуск бота ---
+if chat_id:
+    print(f"Найден сохраненный chat_id={chat_id}, запускаем фоновые задачи")
+    threading.Thread(target=reset_answered_flag, daemon=True).start()
+    threading.Thread(target=send_message_job, daemon=True).start()
+
 bot.infinity_polling()
