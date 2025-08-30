@@ -27,9 +27,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global chat_id
     if chat_id == None:
         chat_id = update.effective_chat.id
-    await update.message.reply_text(
-        "Бот запущен. Для установки расписания используй команду /schedule"
-    )
+        await update.message.reply_text(
+            "Бот запущен. Для установки расписания используй команду /schedule"
+        )
 
 async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global task
