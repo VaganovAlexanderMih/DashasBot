@@ -71,7 +71,7 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     answered = False  # сбрасываем флаг ответа на новый день
     await update.message.reply_text(
-        "Расписание установлено: сообщение будет приходить в 20:40 и каждые 30 минут до ответа."
+        "Расписание установлено: сообщение будет приходить в 21:00 и каждые 30 минут до ответа."
     )
 
 # --- Настраиваем APScheduler ---
@@ -90,7 +90,7 @@ def send_scheduled_message():
         asyncio.create_task(app.bot.send_message(chat_id=chat_id, text=MESSAGE_TEXT))
 
 # Ежедневно в 20:00
-scheduler.add_job(send_scheduled_message, 'cron', hour=20, minute=40)
+scheduler.add_job(send_scheduled_message, 'cron', hour=21, minute=00)
 
 # Каждые 30 минут
 scheduler.add_job(send_scheduled_message, 'interval', minutes=30)
