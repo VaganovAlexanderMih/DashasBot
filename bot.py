@@ -1,4 +1,3 @@
-import asyncio
 import os
 from datetime import datetime, timedelta
 from telegram import Update
@@ -77,11 +76,11 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# --- Асинхронный запуск с удалением webhook ---
-async def main():
-    # удаляем возможный webhook перед polling
-    await app.bot.delete_webhook()
-    await app.run_polling()
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Удаляем возможный webhook перед polling
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(app.bot.delete_webhook())
+
+    # Запускаем polling без asyncio.run
+    app.run_polling()
