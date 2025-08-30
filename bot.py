@@ -58,16 +58,11 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Создаем приложение
 app = ApplicationBuilder().token(TOKEN).build()
-
-# Удаляем webhook перед polling
-async def remove_webhook(app):
-    await app.bot.delete_webhook()
-app.post_init.append(remove_webhook)
-
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 # Запускаем polling
 if __name__ == "__main__":
+    app.bot.delete_webhook()
     app.run_polling()
