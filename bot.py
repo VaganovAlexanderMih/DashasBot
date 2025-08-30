@@ -57,9 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id is None:
         chat_id = update.effective_chat.id
         save_chat_id(chat_id)
-        await update.message.reply_text(
-            f"Бот запущен. chat_id={chat_id}"
-        )
+        await update.message.reply_text(f"Бот запущен. chat_id={chat_id}")
     else:
         await update.message.reply_text("Бот уже запущен.")
 
@@ -79,7 +77,7 @@ def reset_answered_flag():
     answered = False
     print("Флаг answered сброшен в 18:30")
 
-# Ежедневно в 20:00 отправка сообщения
+# Сообщение каждый день в 20:00
 scheduler.add_job(scheduled_message_job, 'cron', hour=20, minute=0)
 
 # Повтор каждые 30 минут
