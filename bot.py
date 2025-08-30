@@ -6,7 +6,6 @@ from flask import Flask
 import threading
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pytz
-from datetime import datetime
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MESSAGE_TEXT = "Выпила таблетки?"
@@ -59,43 +58,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
         save_chat_id(chat_id)
         await update.message.reply_text(
-            f"Бот запущен. Для установки расписания используй команду /schedule. chat_id={chat_id}"
+            f"Бот запущен. chat_id={chat_id}"
         )
     else:
         await update.message.reply_text("Бот уже запущен.")
 
-async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global answered
-    if not chat_id:
-        await update.message.reply_text("Сначала отправь /start")
-        return
-
-    answered = False  # сброс для нового дня
-    await update.message.reply_text(
-        "Расписание установлено: сообщение будет приходить в 20:00 и каждые 30 минут до ответа."
-    )
-
 # --- Создаем приложение ---
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 # --- Настраиваем APScheduler ---
 scheduler = AsyncIOScheduler(timezone=pytz.timezone("Europe/Moscow"))
 
-def scheduled_job():
+def scheduled_message_job():
     asyncio.create_task(send_message())
 
-# Ежедневно в 20:00
-scheduler.add_job(scheduled_job, 'cron', hour=20, minute=0)
+def reset_answered_flag():
+    global answered
+    answered = False
 
-# Каждые 30 минут
-scheduler.add_job(scheduled_job, 'interval', minutes=30)
+# Отправка сообщения каждый день в 20:00
+scheduler.add_job(scheduled_message_job, 'cron', hour=20, minute=0)
+
+# Повтор каждые 30 минут
+scheduler.add_job(scheduled_message_job, 'interval', minutes=30)
+
+# Сброс флага answered каждый день в 18:30
+scheduler.add_job(reset_answered_flag, 'cron', hour=18, minute=30)
 
 scheduler.start()
 
-# --- Запуск без asyncio.run, чтобы избежать конфликта event loop ---
+# --- Запуск ---
 if __name__ == "__main__":
     import asyncio
     loop = asyncio.get_event_loop()
