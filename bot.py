@@ -1,77 +1,81 @@
-import time
-from datetime import datetime, timedelta
-from telegram import Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-
+import asyncio
 import os
+from datetime import datetime, timedelta
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# Токен твоего бота
+# Токен из переменных окружения Render
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# Сообщение, которое бот будет отправлять
-message_text = "Выпила таблетки?"
+# Сообщение для рассылки
+MESSAGE_TEXT = "Выпила таблетки?"
 
-# ID чата для отправки сообщений
+# Переменные для работы
 chat_id = None
-
-# Переменная для отслеживания, был ли ответ
 answered = False
+task = None  # Для хранения задачи asyncio
 
-# Функция, которая отправляет сообщение
-def send_message(context: CallbackContext):
+# Функция отправки сообщения
+async def send_message(application):
     global chat_id, answered
     if chat_id and not answered:
-        context.bot.send_message(chat_id=chat_id, text=message_text)
+        await application.bot.send_message(chat_id=chat_id, text=MESSAGE_TEXT)
 
-# Функция для отслеживания сообщений
-def handle_message(update, context: CallbackContext):
-    global answered
+# Обработчик любых текстовых сообщений (от пользователя)
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global answered, task
     answered = True
-    update.message.reply_text('Спасибо за ответ! Бот больше не будет отправлять сообщения.')
+    if task:
+        task.cancel()  # отменяем повторяющиеся сообщения
+    await update.message.reply_text("Спасибо за ответ! Бот больше не будет слать сообщения.")
 
-# Функция для старта бота
-def start(update, context: CallbackContext):
+# Команда /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global chat_id
-    if (chat_id == None):
-        chat_id = update.message.chat_id
-    update.message.reply_text("Бот запущен и будет отправлять сообщения каждый день в 19:00, пока не получит ответ.")
+    if chat_id == None:
+        chat_id = update.effective_chat.id
+    await update.message.reply_text(
+        "Бот запущен. Для установки расписания используй команду /schedule"
+    )
 
-# Функция для настройки расписания
-def set_schedule(update, context: CallbackContext):
-    job_queue = context.job_queue
+# Команда /schedule
+async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global task
 
-    # Вычисляем, когда нужно отправить первое сообщение (19:00 сегодня или завтра)
+    if not chat_id:
+        await update.message.reply_text("Сначала отправь /start")
+        return
+
+    # Вычисляем время следующего 19:00
     now = datetime.now()
     target_time = now.replace(hour=19, minute=0, second=0, microsecond=0)
-
-    if now > target_time:  # Если текущее время уже прошло 19:00, отправим сообщение завтра
+    if now > target_time:
         target_time += timedelta(days=1)
+    delay_seconds = (target_time - now).total_seconds()
 
-    # Планируем первое сообщение
-    job_queue.run_once(send_message, target_time)
+    await update.message.reply_text(
+        f"Сообщение будет отправлено в {target_time.strftime('%H:%M:%S')} и далее каждые 30 минут до ответа."
+    )
 
-    # Планируем повторяющиеся сообщения каждую половину часа
-    job_queue.run_repeating(send_message, interval=1800, first=target_time)
+    # Создаем асинхронную задачу для повторяющихся сообщений
+    async def repeated_messages():
+        await asyncio.sleep(delay_seconds)  # ждём до 19:00
+        while not answered:
+            await send_message(context.application)
+            await asyncio.sleep(1800)  # повтор каждые 30 минут
 
-    update.message.reply_text(f"Сообщение будет отправлено в {target_time.strftime('%H:%M:%S')} и далее каждые 30 минут.")
+    task = asyncio.create_task(repeated_messages())
 
-def main():
-    # Создаем апдейтера и диспетчера
-    updater = Updater(TOKEN)
-    dp = updater.dispatcher
+# Основная функция
+async def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    # Команды для бота
-    dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(CommandHandler('schedule', set_schedule))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("schedule", schedule))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Обработчик сообщений (если пользователь отвечает на сообщение)
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    await app.run_polling()
 
-    # Запуск бота
-    updater.start_polling()
-
-    # Ожидаем остановки бота
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
