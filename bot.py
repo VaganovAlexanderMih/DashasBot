@@ -10,8 +10,11 @@ bot = telebot.TeleBot(TOKEN)
 
 MESSAGE_TEXT = "Выпила таблетки?"
 chat_file = "chat_id.txt"
+time_file = "send_time.txt"
 chat_id = None
 answered = False
+send_hour = 20
+send_minute = 0
 
 # --- Сохраняем/загружаем chat_id ---
 def save_chat_id(cid):
@@ -26,6 +29,21 @@ def load_chat_id():
         return None
 
 chat_id = load_chat_id()
+
+# --- Сохраняем/загружаем время отправки ---
+def save_send_time(h, m):
+    with open(time_file, "w") as f:
+        f.write(f"{h:02d}:{m:02d}")
+
+def load_send_time():
+    try:
+        with open(time_file) as f:
+            h, m = map(int, f.read().split(":"))
+            return h, m
+    except:
+        return 20, 0  # время по умолчанию
+
+send_hour, send_minute = load_send_time()
 
 # --- Flask сервер для Render ---
 app_http = Flask("web")
@@ -48,31 +66,32 @@ def reset_answered_flag():
         target = now.replace(hour=18, minute=30, second=0, microsecond=0)
         if now > target:
             target += timedelta(days=1)
-        time_to_sleep = (target - now).total_seconds()
-        time.sleep(time_to_sleep)
+        time.sleep((target - now).total_seconds())
         answered = False
         print("Флаг answered сброшен в 18:30")
-
-threading.Thread(target=reset_answered_flag, daemon=True).start()
 
 # --- Отправка сообщений ---
 def send_message_job():
     global answered
     while True:
+        if chat_id is None:
+            time.sleep(10)
+            continue
         now = datetime.now()
-        # сообщение каждый день в 20:00
-        target_time = now.replace(hour=21, minute=30, second=0, microsecond=0)
+        target_time = now.replace(hour=send_hour, minute=send_minute, second=0, microsecond=0)
         if now > target_time:
             target_time += timedelta(days=1)
-        time_to_sleep = (target_time - now).total_seconds()
-        time.sleep(time_to_sleep)
+        time.sleep((target_time - now).total_seconds())
 
-        # повтор каждые 30 минут до ответа
         while not answered and chat_id:
-            bot.send_message(chat_id, MESSAGE_TEXT)
-            time.sleep(1800)  # 30 минут
-
-threading.Thread(target=send_message_job, daemon=True).start()
+            try:
+                bot.send_message(chat_id, MESSAGE_TEXT)
+            except Exception as e:
+                print("Ошибка отправки:", e)
+            for _ in range(30*60):  # 30 минут
+                if answered:
+                    break
+                time.sleep(1)
 
 # --- Обработка команд ---
 @bot.message_handler(commands=['start'])
@@ -82,9 +101,27 @@ def start(message):
     save_chat_id(chat_id)
     bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
 
+    # Стартуем фоновые потоки только после получения chat_id
+    threading.Thread(target=reset_answered_flag, daemon=True).start()
+    threading.Thread(target=send_message_job, daemon=True).start()
+
 @bot.message_handler(commands=['schedule'])
 def schedule(message):
-    bot.reply_to(message, "Сообщения будут отправляться с 20:00 каждые 30 минут до ответа.")
+    global send_hour, send_minute
+    parts = message.text.split()
+    if len(parts) != 2:
+        bot.reply_to(message, "Использование: /schedule HH:MM")
+        return
+    try:
+        h, m = map(int, parts[1].split(":"))
+        if not (0 <= h < 24 and 0 <= m < 60):
+            raise ValueError
+        send_hour = h
+        send_minute = m
+        save_send_time(send_hour, send_minute)
+        bot.reply_to(message, f"Время отправки сообщения изменено на {send_hour:02d}:{send_minute:02d}")
+    except ValueError:
+        bot.reply_to(message, "Неверный формат времени. Используйте HH:MM в 24-часовом формате.")
 
 @bot.message_handler(func=lambda m: True)
 def handle_reply(message):
