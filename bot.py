@@ -1,10 +1,10 @@
-import asyncio
 import os
-from datetime import datetime, timedelta
+import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from flask import Flask
 import threading
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MESSAGE_TEXT = "Выпила таблетки?"
@@ -12,7 +12,6 @@ MESSAGE_TEXT = "Выпила таблетки?"
 chat_file = "chat_id.txt"
 chat_id = None
 answered = False
-task = None
 
 # --- Функции для сохранения chat_id ---
 def save_chat_id(cid):
@@ -48,10 +47,8 @@ async def send_message(application):
         await application.bot.send_message(chat_id=chat_id, text=MESSAGE_TEXT)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global answered, task
+    global answered
     answered = True
-    if task:
-        task.cancel()
     await update.message.reply_text("Спасибо за ответ! Бот больше не будет слать сообщения сегодня.")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,34 +63,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Бот уже запущен.")
 
 async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global task
+    global answered
     if not chat_id:
         await update.message.reply_text("Сначала отправь /start")
         return
 
-    now = datetime.now()
-    target_time = now.replace(hour=20, minute=0, second=0, microsecond=0)
-    if now > target_time:
-        target_time += timedelta(days=1)
-    delay_seconds = (target_time - now).total_seconds()
-
+    answered = False  # сбрасываем флаг ответа на новый день
     await update.message.reply_text(
-        f"Сообщение будет отправлено в {target_time.strftime('%H:%M:%S')} и далее каждые 30 минут до ответа."
+        "Расписание установлено: сообщение будет приходить в 20:40 и каждые 30 минут до ответа."
     )
-
-    async def repeated_messages():
-        await asyncio.sleep(delay_seconds)
-        while not answered:
-            await send_message(context.application)
-            await asyncio.sleep(1800)  # 30 минут
-
-    task = asyncio.create_task(repeated_messages())
 
 # --- Создаем приложение ---
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+# --- Настраиваем APScheduler ---
+scheduler = AsyncIOScheduler()
+
+def send_scheduled_message():
+    global answered
+    if chat_id and not answered:
+        asyncio.create_task(app.bot.send_message(chat_id=chat_id, text=MESSAGE_TEXT))
+
+# Ежедневно в 20:00
+scheduler.add_job(send_scheduled_message, 'cron', hour=20, minute=40)
+
+# Каждые 30 минут
+scheduler.add_job(send_scheduled_message, 'interval', minutes=30)
+
+scheduler.start()
 
 # --- Запуск без asyncio.run, чтобы избежать конфликта event loop ---
 if __name__ == "__main__":
