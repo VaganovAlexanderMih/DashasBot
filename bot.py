@@ -77,9 +77,10 @@ def scheduled_message_job():
 def reset_answered_flag():
     global answered
     answered = False
+    print("Флаг answered сброшен в 18:30")
 
-# Отправка сообщения каждый день в 20:00
-scheduler.add_job(scheduled_message_job, 'cron', hour=21, minute=0)
+# Ежедневно в 20:00 отправка сообщения
+scheduler.add_job(scheduled_message_job, 'cron', hour=20, minute=0)
 
 # Повтор каждые 30 минут
 scheduler.add_job(scheduled_message_job, 'interval', minutes=30)
