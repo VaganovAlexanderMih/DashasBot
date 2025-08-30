@@ -104,6 +104,8 @@ def send_message_job():
 @bot.message_handler(commands=['start'])
 def start(message):
     global chat_id
+    global answered
+    answered = False
     chat_id = message.chat.id
     save_chat_id(chat_id)
     bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
