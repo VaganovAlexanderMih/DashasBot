@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import datetime, timedelta
 from telegram import Update
@@ -8,9 +9,24 @@ import threading
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MESSAGE_TEXT = "Выпила таблетки?"
 
+chat_file = "chat_id.txt"
 chat_id = None
 answered = False
 task = None
+
+# --- Функции для сохранения chat_id ---
+def save_chat_id(cid):
+    with open(chat_file, "w") as f:
+        f.write(str(cid))
+
+def load_chat_id():
+    try:
+        with open(chat_file) as f:
+            return int(f.read())
+    except:
+        return None
+
+chat_id = load_chat_id()
 
 # --- Flask сервер для Render ---
 app_http = Flask("web")
@@ -42,9 +58,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global chat_id
     if chat_id is None:
         chat_id = update.effective_chat.id
+        save_chat_id(chat_id)
         await update.message.reply_text(
-            "Бот запущен. Для установки расписания используй команду /schedule"
+            f"Бот запущен. Для установки расписания используй команду /schedule. chat_id={chat_id}"
         )
+    else:
+        await update.message.reply_text("Бот уже запущен.")
 
 async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global task
@@ -53,7 +72,7 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     now = datetime.now()
-    target_time = now.replace(hour=19, minute=30, second=0, microsecond=0)
+    target_time = now.replace(hour=19, minute=0, second=0, microsecond=0)
     if now > target_time:
         target_time += timedelta(days=1)
     delay_seconds = (target_time - now).total_seconds()
@@ -66,7 +85,7 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await asyncio.sleep(delay_seconds)
         while not answered:
             await send_message(context.application)
-            await asyncio.sleep(1800)
+            await asyncio.sleep(1800)  # 30 минут
 
     task = asyncio.create_task(repeated_messages())
 
@@ -76,11 +95,9 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+# --- Запуск без asyncio.run, чтобы избежать конфликта event loop ---
 if __name__ == "__main__":
-    # Удаляем возможный webhook перед polling
     import asyncio
     loop = asyncio.get_event_loop()
     loop.run_until_complete(app.bot.delete_webhook())
-
-    # Запускаем polling без asyncio.run
     app.run_polling()
