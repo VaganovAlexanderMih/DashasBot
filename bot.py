@@ -5,6 +5,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 from flask import Flask
 import threading
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import pytz
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MESSAGE_TEXT = "Выпила таблетки?"
@@ -80,7 +81,7 @@ app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 # --- Настраиваем APScheduler ---
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone=pytz.timezone("Europe/Moscow"))
 
 def send_scheduled_message():
     global answered
