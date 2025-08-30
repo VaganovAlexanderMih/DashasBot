@@ -3,6 +3,7 @@ import telebot
 import threading
 import time
 from datetime import datetime, timedelta
+from flask import Flask
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
@@ -25,6 +26,19 @@ def load_chat_id():
         return None
 
 chat_id = load_chat_id()
+
+# --- Flask сервер для Render ---
+app_http = Flask("web")
+
+@app_http.route("/")
+def index():
+    return "Bot is running!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app_http.run(host="0.0.0.0", port=port)
+
+threading.Thread(target=run_flask, daemon=True).start()
 
 # --- Сброс флага answered каждый день в 18:30 ---
 def reset_answered_flag():
