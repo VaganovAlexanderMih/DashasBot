@@ -72,7 +72,7 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     now = datetime.now()
-    target_time = now.replace(hour=19, minute=0, second=0, microsecond=0)
+    target_time = now.replace(hour=19, minute=51, second=0, microsecond=0)
     if now > target_time:
         target_time += timedelta(days=1)
     delay_seconds = (target_time - now).total_seconds()
