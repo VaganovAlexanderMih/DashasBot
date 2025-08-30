@@ -79,23 +79,30 @@ def send_message_job():
             continue
 
         now = datetime.now()
-        # динамически формируем цель с учетом текущих send_hour и send_minute
         target_time = now.replace(hour=send_hour, minute=send_minute, second=0, microsecond=0)
         if now > target_time:
             target_time += timedelta(days=1)
 
-        sleep_seconds = (target_time - now).total_seconds()
-        while sleep_seconds > 0:
-            time.sleep(min(60, sleep_seconds))  # проверка каждую минуту
-            sleep_seconds -= min(60, sleep_seconds)
+        wait_seconds = (target_time - now).total_seconds()
+        print(f"[send_job] Жду до {target_time.strftime('%H:%M')} ({wait_seconds/60:.1f} мин)")
+        
+        # короткий сон, чтобы можно было прервать изменением расписания
+        while wait_seconds > 0:
+            step = min(30, wait_seconds)  # максимум 30 сек
+            time.sleep(step)
+            wait_seconds -= step
+            # если время изменилось — выходим из ожидания
+            if datetime.now().replace(second=0, microsecond=0).strftime("%H:%M") == f"{send_hour:02d}:{send_minute:02d}":
+                break
 
         # повтор каждые 30 минут до ответа
         while not answered and chat_id:
             try:
+                print(f"[send_job] Отправляю сообщение {MESSAGE_TEXT} в {datetime.now()}")
                 bot.send_message(chat_id, MESSAGE_TEXT)
             except Exception as e:
                 print("Ошибка отправки:", e)
-            for _ in range(30 * 60):  # 30 минут
+            for _ in range(30*60):  # 30 минут
                 if answered:
                     break
                 time.sleep(1)
@@ -128,7 +135,8 @@ def schedule(message):
         send_hour = h
         send_minute = m
         save_send_time(send_hour, send_minute)
-        bot.reply_to(message, f"Время отправки сообщения изменено на {send_hour:02d}:{send_minute:02d}")
+        bot.reply_to(message, f"Время изменено на {send_hour:02d}:{send_minute:02d}")
+        print(f"[schedule] Новое время: {send_hour:02d}:{send_minute:02d}")
     except ValueError:
         bot.reply_to(message, "Неверный формат времени. Используйте HH:MM в 24-часовом формате.")
 
@@ -136,7 +144,8 @@ def schedule(message):
 def handle_reply(message):
     global answered
     answered = True
-    bot.reply_to(message, "Спасибо за ответ! Бот больше не будет слать сообщения сегодня.")
+    bot.reply_to(message, "Спасибо за ответ! Сообщения больше не будут отправляться сегодня.")
+    print(f"[reply] Получен ответ: {message.text}")
 
 # --- Запуск бота ---
 if chat_id:
