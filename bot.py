@@ -61,7 +61,7 @@ def send_message_job():
     while True:
         now = datetime.now()
         # сообщение каждый день в 20:00
-        target_time = now.replace(hour=20, minute=0, second=0, microsecond=0)
+        target_time = now.replace(hour=21, minute=30, second=0, microsecond=0)
         if now > target_time:
             target_time += timedelta(days=1)
         time_to_sleep = (target_time - now).total_seconds()
