@@ -3,6 +3,8 @@ import os
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from flask import Flask
+import threading
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MESSAGE_TEXT = "Выпила таблетки?"
@@ -11,6 +13,20 @@ chat_id = None
 answered = False
 task = None
 
+# --- Flask сервер для Render ---
+app_http = Flask("web")
+
+@app_http.route("/")
+def index():
+    return "Bot is running!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app_http.run(host="0.0.0.0", port=port)
+
+threading.Thread(target=run_flask).start()
+
+# --- Telegram бота ---
 async def send_message(application):
     global chat_id, answered
     if chat_id and not answered:
@@ -33,7 +49,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global task
-
     if not chat_id:
         await update.message.reply_text("Сначала отправь /start")
         return
@@ -56,13 +71,17 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     task = asyncio.create_task(repeated_messages())
 
-# Создаем приложение
+# --- Создаем приложение ---
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Запускаем polling
+# --- Асинхронный запуск с удалением webhook ---
+async def main():
+    # удаляем возможный webhook перед polling
+    await app.bot.delete_webhook()
+    await app.run_polling()
+
 if __name__ == "__main__":
-    app.bot.delete_webhook()
-    app.run_polling()
+    asyncio.run(main())
