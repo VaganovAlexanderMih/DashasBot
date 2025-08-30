@@ -1,11 +1,12 @@
 import os
 import asyncio
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from flask import Flask
 import threading
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pytz
+from datetime import datetime
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MESSAGE_TEXT = "Выпила таблетки?"
@@ -42,10 +43,10 @@ def run_flask():
 threading.Thread(target=run_flask).start()
 
 # --- Telegram бота ---
-async def send_message(application):
+async def send_message():
     global chat_id, answered
     if chat_id and not answered:
-        await application.bot.send_message(chat_id=chat_id, text=MESSAGE_TEXT)
+        await app.bot.send_message(chat_id=chat_id, text=MESSAGE_TEXT)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global answered
@@ -69,31 +70,28 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Сначала отправь /start")
         return
 
-    answered = False  # сбрасываем флаг ответа на новый день
+    answered = False  # сброс для нового дня
     await update.message.reply_text(
-        "Расписание установлено: сообщение будет приходить в 21:00 и каждые 30 минут до ответа."
+        "Расписание установлено: сообщение будет приходить в 20:00 и каждые 30 минут до ответа."
     )
 
-# --- Настраиваем APScheduler ---
-scheduler = AsyncIOScheduler(timezone=pytz.timezone("Europe/Moscow"))
-job_queue = JobQueue(application=None, scheduler=scheduler)
-
 # --- Создаем приложение ---
-app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
+app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-def send_scheduled_message():
-    global answered
-    if chat_id and not answered:
-        asyncio.create_task(app.bot.send_message(chat_id=chat_id, text=MESSAGE_TEXT))
+# --- Настраиваем APScheduler ---
+scheduler = AsyncIOScheduler(timezone=pytz.timezone("Europe/Moscow"))
+
+def scheduled_job():
+    asyncio.create_task(send_message())
 
 # Ежедневно в 20:00
-scheduler.add_job(send_scheduled_message, 'cron', hour=21, minute=00)
+scheduler.add_job(scheduled_job, 'cron', hour=20, minute=0)
 
 # Каждые 30 минут
-scheduler.add_job(send_scheduled_message, 'interval', minutes=30)
+scheduler.add_job(scheduled_job, 'interval', minutes=30)
 
 scheduler.start()
 
