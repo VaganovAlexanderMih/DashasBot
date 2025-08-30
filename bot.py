@@ -77,18 +77,25 @@ def send_message_job():
         if chat_id is None:
             time.sleep(10)
             continue
+
         now = datetime.now()
+        # динамически формируем цель с учетом текущих send_hour и send_minute
         target_time = now.replace(hour=send_hour, minute=send_minute, second=0, microsecond=0)
         if now > target_time:
             target_time += timedelta(days=1)
-        time.sleep((target_time - now).total_seconds())
 
+        sleep_seconds = (target_time - now).total_seconds()
+        while sleep_seconds > 0:
+            time.sleep(min(60, sleep_seconds))  # спим максимум минуту, чтобы catch-up обновился
+            sleep_seconds -= min(60, sleep_seconds)
+
+        # повтор каждые 30 минут до ответа
         while not answered and chat_id:
             try:
                 bot.send_message(chat_id, MESSAGE_TEXT)
             except Exception as e:
                 print("Ошибка отправки:", e)
-            for _ in range(30*60):  # 30 минут
+            for _ in range(30*60):  # 30 минут, проверяем каждую секунду
                 if answered:
                     break
                 time.sleep(1)
