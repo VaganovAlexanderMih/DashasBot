@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from telegram import Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
+import os
+
 # Токен твоего бота
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
