@@ -1,7 +1,7 @@
 import os
 import asyncio
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue
 from flask import Flask
 import threading
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -74,14 +74,15 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Расписание установлено: сообщение будет приходить в 20:40 и каждые 30 минут до ответа."
     )
 
+# --- Настраиваем APScheduler ---
+scheduler = AsyncIOScheduler(timezone=pytz.timezone("Europe/Moscow"))
+job_queue = JobQueue(application=None, scheduler=scheduler)
+
 # --- Создаем приложение ---
-app = ApplicationBuilder().token(TOKEN).build()
+app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-# --- Настраиваем APScheduler ---
-scheduler = AsyncIOScheduler(timezone=pytz.timezone("Europe/Moscow"))
 
 def send_scheduled_message():
     global answered
