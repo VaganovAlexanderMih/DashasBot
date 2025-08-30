@@ -1,7 +1,7 @@
 import asyncio
 import os
 from datetime import datetime, timedelta
-from telegram import Update, Bot
+from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -25,7 +25,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global chat_id
-    if chat_id == None:
+    if chat_id is None:
         chat_id = update.effective_chat.id
         await update.message.reply_text(
             "Бот запущен. Для установки расписания используй команду /schedule"
@@ -57,13 +57,17 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task = asyncio.create_task(repeated_messages())
 
 # Создаем приложение
-bot = Bot(token=TOKEN)
-bot.delete_webhook()
 app = ApplicationBuilder().token(TOKEN).build()
+
+# Удаляем webhook перед polling
+async def remove_webhook(app):
+    await app.bot.delete_webhook()
+app.post_init.append(remove_webhook)
+
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Для Render Web Service просто запускаем run_polling без asyncio.run
+# Запускаем polling
 if __name__ == "__main__":
     app.run_polling()
