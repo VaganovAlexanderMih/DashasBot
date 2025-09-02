@@ -124,7 +124,7 @@ def send_message_job():
             remain = (next_run - now).total_seconds()
             if remain <= 0:
                 break
-            woke = schedule_changed.wait(timeout=min(30, remain))
+            woke = schedule_changed.wait(timeout=min(3, remain))
             if woke:
                 schedule_changed.clear()
                 next_run = compute_next_target(datetime.now())
