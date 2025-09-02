@@ -139,7 +139,7 @@ def send_message_job():
                 logger.error(f"Ошибка отправки: {e}")
 
             # ждем 30 мин по секундам
-            for _ in range(30 * 60):
+            for _ in range(3 * 60):
                 if answered:
                     logger.info("Получен ответ от пользователя, цикл остановлен")
                     break
