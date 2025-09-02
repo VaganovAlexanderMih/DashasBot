@@ -2,9 +2,19 @@ import os
 import telebot
 import threading
 import time
+import logging
 from datetime import datetime, timedelta
 from flask import Flask
 
+# --- Настройка логов ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+# --- Бот ---
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
@@ -25,27 +35,32 @@ schedule_changed = threading.Event()
 def save_chat_id(cid):
     with open(chat_file, "w") as f:
         f.write(str(cid))
+    logger.info(f"chat_id сохранён: {cid}")
 
 
 def load_chat_id():
     try:
         with open(chat_file) as f:
-            return int(f.read())
-    except:
+            cid = int(f.read())
+            logger.info(f"Загружен chat_id: {cid}")
+            return cid
+    except Exception:
         return None
 
 
 def save_send_time(h, m):
     with open(time_file, "w") as f:
         f.write(f"{h:02d}:{m:02d}")
+    logger.info(f"Время отправки сохранено: {h:02d}:{m:02d}")
 
 
 def load_send_time():
     try:
         with open(time_file) as f:
             h, m = map(int, f.read().split(":"))
+            logger.info(f"Загружено время отправки: {h:02d}:{m:02d}")
             return h, m
-    except:
+    except Exception:
         return 20, 0
 
 
@@ -64,6 +79,7 @@ def index():
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
+    logger.info(f"Запуск Flask на порту {port}")
     app_http.run(host="0.0.0.0", port=port)
 
 
@@ -88,7 +104,7 @@ def reset_answered_flag():
             target += timedelta(days=1)
         time.sleep((target - now).total_seconds())
         answered = False
-        print("[reset] Флаг answered сброшен в 18:30")
+        logger.info("Флаг answered сброшен в 18:30")
 
 
 # --- Основной планировщик ---
@@ -100,7 +116,7 @@ def send_message_job():
             continue
 
         next_run = compute_next_target(datetime.now())
-        print(f"[job] Следующая отправка в {next_run.strftime('%H:%M')}")
+        logger.info(f"Следующая отправка в {next_run.strftime('%H:%M')}")
 
         # ждем до времени запуска
         while True:
@@ -112,26 +128,27 @@ def send_message_job():
             if woke:
                 schedule_changed.clear()
                 next_run = compute_next_target(datetime.now())
-                print(f"[job] Расписание изменено, новое время {next_run.strftime('%H:%M')}")
+                logger.info(f"Расписание изменено, новое время {next_run.strftime('%H:%M')}")
 
         # цикл повторов каждые 30 мин
         while not answered and chat_id:
             try:
                 bot.send_message(chat_id, MESSAGE_TEXT)
-                print(f"[job] Сообщение отправлено {datetime.now().strftime('%H:%M')}")
+                logger.info(f"Сообщение отправлено {datetime.now().strftime('%H:%M')}")
             except Exception as e:
-                print(f"[job] Ошибка отправки: {e}")
+                logger.error(f"Ошибка отправки: {e}")
 
-            # ждем 30 мин по секундам, чтобы можно было прервать ответом
+            # ждем 30 мин по секундам
             for _ in range(30 * 60):
                 if answered:
+                    logger.info("Получен ответ от пользователя, цикл остановлен")
                     break
                 if schedule_changed.is_set():
+                    logger.info("Расписание изменено во время ожидания, выходим из цикла")
                     schedule_changed.clear()
                     break
                 time.sleep(1)
 
-            # если изменилось расписание — выходим к внешнему циклу
             if schedule_changed.is_set():
                 break
 
@@ -144,6 +161,7 @@ def start(message):
     chat_id = message.chat.id
     save_chat_id(chat_id)
     bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
+    logger.info(f"/start вызван. chat_id={chat_id}")
 
     threading.Thread(target=reset_answered_flag, daemon=True).start()
     threading.Thread(target=send_message_job, daemon=True).start()
@@ -164,18 +182,21 @@ def schedule(message):
         save_send_time(h, m)
         schedule_changed.set()
         bot.reply_to(message, f"Время изменено на {h:02d}:{m:02d}")
+        logger.info(f"/schedule: время изменено на {h:02d}:{m:02d}")
     except ValueError:
         bot.reply_to(message, "Неверный формат. Используйте HH:MM.")
+        logger.warning("Ошибка формата в /schedule")
 
 
 @bot.message_handler(commands=["status"])
 def status(message):
-    bot.reply_to(
-        message,
+    msg = (
         f"Текущее время отправки: {send_hour:02d}:{send_minute:02d}\n"
         f"answered = {answered}\n"
-        f"chat_id = {chat_id}",
+        f"chat_id = {chat_id}"
     )
+    bot.reply_to(message, msg)
+    logger.info("/status вызван")
 
 
 @bot.message_handler(func=lambda m: True)
@@ -183,12 +204,14 @@ def handle_reply(message):
     global answered
     answered = True
     bot.reply_to(message, "Спасибо за ответ! До завтра 🚀")
+    logger.info(f"Ответ получен: '{message.text}'")
 
 
 # --- Запуск ---
 if chat_id:
-    print(f"Найден chat_id={chat_id}, запускаем фоновые задачи")
+    logger.info(f"Найден chat_id={chat_id}, запускаем фоновые задачи")
     threading.Thread(target=reset_answered_flag, daemon=True).start()
     threading.Thread(target=send_message_job, daemon=True).start()
 
+logger.info("Бот запущен, начинаем polling...")
 bot.infinity_polling()
