@@ -22,11 +22,13 @@ bot = telebot.TeleBot(TOKEN)
 MESSAGE_TEXT = "Выпила таблетки?"
 chat_file = "chat_id.txt"
 time_file = "send_time.txt"
+interval_file = "interval.txt"
 
 chat_id = None
 answered = False
 send_hour = 20
 send_minute = 0
+reminder_interval = 30  # минуты по умолчанию
 
 # --- Сохранение/загрузка chat_id ---
 def save_chat_id(cid):
@@ -56,6 +58,20 @@ def load_send_time():
         return 20, 0
 
 send_hour, send_minute = load_send_time()
+
+# --- Сохранение/загрузка интервала ---
+def save_interval(minutes):
+    with open(interval_file, "w") as f:
+        f.write(str(minutes))
+
+def load_interval():
+    try:
+        with open(interval_file) as f:
+            return int(f.read())
+    except:
+        return 30
+
+reminder_interval = load_interval()
 
 # --- Flask ---
 app = Flask(__name__)
@@ -95,16 +111,17 @@ def send_message_job():
             target_time += timedelta(days=1)
 
         sleep_seconds = (target_time - now).total_seconds()
+        logger.info(f"Ожидание до следующего сообщения: {sleep_seconds/60:.1f} минут")
         time.sleep(sleep_seconds)
 
-        # повтор каждые 30 минут
+        # повтор с заданным интервалом
         while not answered and chat_id:
             try:
                 bot.send_message(chat_id, MESSAGE_TEXT)
                 logger.info(f"Сообщение отправлено {chat_id}")
             except Exception as e:
                 logger.error(f"Ошибка отправки: {e}")
-            for _ in range(30 * 60):
+            for _ in range(reminder_interval * 60):
                 if answered:
                     break
                 time.sleep(1)
@@ -116,9 +133,6 @@ def start(message):
     answered = False
     save_chat_id(chat_id)
     bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
-
-    threading.Thread(target=reset_answered_flag, daemon=True).start()
-    threading.Thread(target=send_message_job, daemon=True).start()
 
 @bot.message_handler(commands=['schedule'])
 def schedule(message):
@@ -134,9 +148,27 @@ def schedule(message):
         send_hour, send_minute = h, m
         save_send_time(h, m)
         bot.reply_to(message, f"Время изменено на {h:02d}:{m:02d}")
-        logger.info(f"Новое время: {h:02d}:{m:02d}")
+        logger.info(f"Новое время рассылки: {h:02d}:{m:02d}")
     except ValueError:
         bot.reply_to(message, "Неверный формат. Используй HH:MM")
+
+@bot.message_handler(commands=['interval'])
+def interval(message):
+    global reminder_interval
+    parts = message.text.split()
+    if len(parts) != 2:
+        bot.reply_to(message, "Использование: /interval N (в минутах)")
+        return
+    try:
+        minutes = int(parts[1])
+        if minutes < 1:
+            raise ValueError
+        reminder_interval = minutes
+        save_interval(minutes)
+        bot.reply_to(message, f"Интервал изменен на {minutes} минут")
+        logger.info(f"Интервал напоминаний: {minutes} минут")
+    except ValueError:
+        bot.reply_to(message, "Неверный формат. Используй целое число больше 0")
 
 @bot.message_handler(func=lambda m: True)
 def handle_reply(message):
@@ -157,5 +189,12 @@ def set_webhook():
 
 if __name__ == "__main__":
     set_webhook()
+
+    logger.info(f"Запуск бота. Загружен chat_id={chat_id}, время {send_hour:02d}:{send_minute:02d}, интервал {reminder_interval} мин")
+
+    # --- Запускаем фоновые потоки ---
+    threading.Thread(target=reset_answered_flag, daemon=True).start()
+    threading.Thread(target=send_message_job, daemon=True).start()
+
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
