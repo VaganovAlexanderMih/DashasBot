@@ -2,3 +2,4 @@ pyTelegramBotAPI==4.13.0
 Flask==2.3.3
 APScheduler
 pytz
+gunicorn
