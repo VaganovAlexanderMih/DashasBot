@@ -82,12 +82,15 @@ def index():
 def webhook():
     try:
         update_dict = request.get_json(force=True)
-        update_obj = Update.de_json(update_dict)   # ✅ правильно
-        bot.process_new_updates([update_obj])      # ✅ передаём список объектов Update
+        logger.info(f"Update from Telegram: {update_dict}")
+        if update_dict:
+            update_obj = Update.de_json(update_dict)
+            bot.process_new_updates([update_obj])
         return "OK", 200
     except Exception as e:
         logger.error(f"Ошибка webhook: {e}")
         return "Error", 500
+
 
 @app.route("/send_reminder", methods=["GET"])
 def send_reminder():
