@@ -1,6 +1,7 @@
 import os
+import json
 import telebot
-from flask import Flask
+from flask import Flask, request
 from datetime import datetime, time as dt_time
 import logging
 
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # --- Конфиг ---
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+APP_URL = os.getenv("APP_URL")  # например: https://mybot.onrender.com
 bot = telebot.TeleBot(TOKEN)
 
 MESSAGE_TEXT = "Выпила таблетки?"
@@ -74,10 +76,23 @@ app = Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Bot is running!"
+    return "Bot is running with webhook!"
+
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    """Обработка апдейтов от Telegram"""
+    try:
+        update = request.get_json(force=True)
+        if update:
+            bot.process_new_updates([telebot.types.Update.de_json(json.dumps(update))])
+        return "OK", 200
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook: {e}")
+        return "Error", 500
 
 @app.route("/send_reminder", methods=["GET"])
 def send_reminder():
+    """Эндпоинт для ручной отправки напоминания (например, из UptimeRobot)"""
     global answered
     if chat_id is None:
         logger.info("chat_id не задан, сообщение не отправлено")
@@ -154,12 +169,15 @@ def handle_reply(message):
     except Exception as e:
         logger.error(f"Ошибка при ответе: {e}")
 
-# --- Запуск бота и Flask ---
+# --- Установка webhook ---
+def set_webhook():
+    webhook_url = f"{APP_URL}/{TOKEN}"
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    logger.info(f"Webhook установлен: {webhook_url}")
+
 if __name__ == "__main__":
-    import threading
-    # Запуск Telegram polling в отдельном потоке (для приема команд)
-    threading.Thread(target=bot.infinity_polling, daemon=True).start()
-    # Запуск Flask
+    set_webhook()
     port = int(os.environ.get("PORT", 10000))
     logger.info(f"Запуск Flask на порту {port}")
     app.run(host="0.0.0.0", port=port)
