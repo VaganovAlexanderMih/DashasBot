@@ -80,14 +80,13 @@ def index():
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    """Обработка апдейтов от Telegram"""
     try:
-        update = request.get_json(force=True)
-        if update:
-            bot.process_new_updates([Update.de_json(update)])
+        update_dict = request.get_json(force=True)
+        update_obj = Update.de_json(update_dict)   # ✅ правильно
+        bot.process_new_updates([update_obj])      # ✅ передаём список объектов Update
         return "OK", 200
     except Exception as e:
-        logger.error(f"Ошибка обработки webhook: {e}")
+        logger.error(f"Ошибка webhook: {e}")
         return "Error", 500
 
 @app.route("/send_reminder", methods=["GET"])
