@@ -132,7 +132,7 @@ def start(message):
     answered = False
     save_chat_id(chat_id)
     try:
-        bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
+        bot.send_message(chat_id, f"Бот запущен. chat_id={chat_id}")
     except Exception as e:
         logger.error(f"Ошибка reply_to: {e}")
     logger.info(f"Пользователь {chat_id} запустил бота")
@@ -140,8 +140,10 @@ def start(message):
 def handle_reply(message):
     global answered
     answered = True
+    if (chat_id is None):
+        return
     try:
-        bot.reply_to(message, "Спасибо за ответ! До завтра 🚀")
+        bot.send_message(chat_id, "Спасибо за ответ! До завтра 🚀")
         logger.info(f"Пользователь {chat_id} ответил, рассылка приостановлена")
     except Exception as e:
         logger.error(f"Ошибка при ответе: {e}")
