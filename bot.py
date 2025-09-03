@@ -129,7 +129,10 @@ def start(message):
     chat_id = message.chat.id
     answered = False
     save_chat_id(chat_id)
-    bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
+    try:
+        bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
+    except Exception as e:
+        logger.error(f"Ошибка reply_to: {e}")
     logger.info(f"Пользователь {chat_id} запустил бота")
 
 @bot.message_handler(commands=['schedule'])
