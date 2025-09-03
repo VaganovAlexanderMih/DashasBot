@@ -120,6 +120,9 @@ def send_reminder():
 
 @app.route("/reset_answered", methods=["GET"])
 def reset_answered():
+    now = datetime.now()
+    if now.time() < dt_time(18, 30) or now.time() > dt_time(send_hour, send_minute):
+        return
     global answered
     answered = False
     logger.info("Флаг answered сброшен")
