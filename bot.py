@@ -122,7 +122,7 @@ def send_reminder():
 def reset_answered():
     now = datetime.now()
     if now.time() < dt_time(18, 30) or now.time() > dt_time(send_hour, send_minute):
-        return
+        return "too early or too old", 200
     global answered
     answered = False
     logger.info("Флаг answered сброшен")
