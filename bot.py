@@ -83,9 +83,12 @@ def webhook():
     try:
         update_dict = request.get_json(force=True)
         logger.info(f"Update from Telegram: {update_dict}")
-        if update_dict:
-            update_obj = Update.de_json(update_dict)
-            bot.process_new_updates([update_obj])
+        message = update_dict['message']
+        text = message['text']
+        if text == '/start':
+            start(message)
+        else:
+            handle_reply(message)
         return "OK", 200
     except Exception as e:
         logger.error(f"Ошибка webhook: {e}")
@@ -123,7 +126,6 @@ def reset_answered():
     return "answered reset", 200
 
 # --- Telegram команды ---
-@bot.message_handler(commands=['start'])
 def start(message):
     global chat_id, answered
     chat_id = message.chat.id
@@ -135,43 +137,6 @@ def start(message):
         logger.error(f"Ошибка reply_to: {e}")
     logger.info(f"Пользователь {chat_id} запустил бота")
 
-@bot.message_handler(commands=['schedule'])
-def schedule(message):
-    global send_hour, send_minute
-    parts = message.text.split()
-    if len(parts) != 2:
-        bot.reply_to(message, "Использование: /schedule HH:MM")
-        return
-    try:
-        h, m = map(int, parts[1].split(":"))
-        if not (0 <= h < 24 and 0 <= m < 60):
-            raise ValueError
-        send_hour, send_minute = h, m
-        save_send_time(h, m)
-        bot.reply_to(message, f"Время отправки изменено на {h:02d}:{m:02d}")
-        logger.info(f"Новое время рассылки: {h:02d}:{m:02d}")
-    except ValueError:
-        bot.reply_to(message, "Неверный формат. Используй HH:MM")
-
-@bot.message_handler(commands=['interval'])
-def interval(message):
-    global reminder_interval
-    parts = message.text.split()
-    if len(parts) != 2:
-        bot.reply_to(message, "Использование: /interval N (в минутах)")
-        return
-    try:
-        minutes = int(parts[1])
-        if minutes < 1:
-            raise ValueError
-        reminder_interval = minutes
-        save_interval(minutes)
-        bot.reply_to(message, f"Интервал изменен на {minutes} минут")
-        logger.info(f"Интервал напоминаний: {minutes} минут")
-    except ValueError:
-        bot.reply_to(message, "Неверный формат. Используй целое число больше 0")
-
-@bot.message_handler(func=lambda m: True)
 def handle_reply(message):
     global answered
     answered = True
