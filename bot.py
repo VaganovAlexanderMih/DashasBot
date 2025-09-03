@@ -132,6 +132,8 @@ def reset_answered():
 def start(message):
     logger.info(message)
     global chat_id, answered
+    if chat_id is not None:
+        return
     chat_id = message['chat']['id']
     answered = False
     save_chat_id(chat_id)
