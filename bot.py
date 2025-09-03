@@ -1,9 +1,9 @@
 import os
-import json
 import telebot
 from flask import Flask, request
 from datetime import datetime, time as dt_time
 import logging
+from telebot.types import Update
 
 # --- Логгер ---
 logging.basicConfig(
@@ -28,7 +28,7 @@ send_hour = 19
 send_minute = 0
 reminder_interval = 30
 
-# --- Сохранение/загрузка ---
+# --- Сохранение/загрузка chat_id ---
 def save_chat_id(cid):
     with open(chat_file, "w") as f:
         f.write(str(cid))
@@ -40,6 +40,9 @@ def load_chat_id():
     except:
         return None
 
+chat_id = load_chat_id()
+
+# --- Сохранение/загрузка времени ---
 def save_send_time(h, m):
     with open(time_file, "w") as f:
         f.write(f"{h:02d}:{m:02d}")
@@ -52,6 +55,9 @@ def load_send_time():
     except:
         return 19, 0
 
+send_hour, send_minute = load_send_time()
+
+# --- Сохранение/загрузки интервала ---
 def save_interval(minutes):
     with open(interval_file, "w") as f:
         f.write(str(minutes))
@@ -63,8 +69,6 @@ def load_interval():
     except:
         return 30
 
-chat_id = load_chat_id()
-send_hour, send_minute = load_send_time()
 reminder_interval = load_interval()
 
 # --- Flask ---
@@ -72,14 +76,15 @@ app = Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Bot is running with webhook!", 200
+    return "Bot is running with webhook!"
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
+    """Обработка апдейтов от Telegram"""
     try:
         update = request.get_json(force=True)
         if update:
-            bot.process_new_updates([telebot.types.Update.de_json(json.dumps(update))])
+            bot.process_new_updates([Update.de_json(update)])
         return "OK", 200
     except Exception as e:
         logger.error(f"Ошибка обработки webhook: {e}")
@@ -89,18 +94,23 @@ def webhook():
 def send_reminder():
     global answered
     if chat_id is None:
+        logger.info("chat_id не задан, сообщение не отправлено")
         return "No chat_id", 200
 
     now = datetime.now()
     if now.time() < dt_time(send_hour, send_minute):
+        logger.info(f"Ещё не {send_hour:02d}:{send_minute:02d}, сообщение не отправлено")
         return "Too early", 200
 
     if not answered:
         try:
             bot.send_message(chat_id, MESSAGE_TEXT)
-            logger.info(f"Сообщение отправлено {chat_id}")
+            logger.info(f"Сообщение отправлено пользователю {chat_id}")
         except Exception as e:
-            logger.error(f"Ошибка отправки: {e}")
+            logger.error(f"Ошибка при отправке сообщения: {e}")
+    else:
+        logger.info("Пользователь уже ответил, сообщение не отправлено")
+
     return "OK", 200
 
 @app.route("/reset_answered", methods=["GET"])
@@ -133,8 +143,8 @@ def schedule(message):
             raise ValueError
         send_hour, send_minute = h, m
         save_send_time(h, m)
-        bot.reply_to(message, f"Время изменено на {h:02d}:{m:02d}")
-        logger.info(f"Новое время {h:02d}:{m:02d}")
+        bot.reply_to(message, f"Время отправки изменено на {h:02d}:{m:02d}")
+        logger.info(f"Новое время рассылки: {h:02d}:{m:02d}")
     except ValueError:
         bot.reply_to(message, "Неверный формат. Используй HH:MM")
 
@@ -143,7 +153,7 @@ def interval(message):
     global reminder_interval
     parts = message.text.split()
     if len(parts) != 2:
-        bot.reply_to(message, "Использование: /interval N")
+        bot.reply_to(message, "Использование: /interval N (в минутах)")
         return
     try:
         minutes = int(parts[1])
@@ -151,14 +161,28 @@ def interval(message):
             raise ValueError
         reminder_interval = minutes
         save_interval(minutes)
-        bot.reply_to(message, f"Интервал изменен на {minutes} мин")
-        logger.info(f"Интервал изменен на {minutes} мин")
+        bot.reply_to(message, f"Интервал изменен на {minutes} минут")
+        logger.info(f"Интервал напоминаний: {minutes} минут")
     except ValueError:
-        bot.reply_to(message, "Неверный формат. Используй число > 0")
+        bot.reply_to(message, "Неверный формат. Используй целое число больше 0")
 
 @bot.message_handler(func=lambda m: True)
 def handle_reply(message):
     global answered
     answered = True
-    bot.reply_to(message, "Спасибо за ответ! До завтра 🚀")
-    logger.info(f"Ответ от {chat_id}, рассылка приостановлена")
+    try:
+        bot.reply_to(message, "Спасибо за ответ! До завтра 🚀")
+        logger.info(f"Пользователь {chat_id} ответил, рассылка приостановлена")
+    except Exception as e:
+        logger.error(f"Ошибка при ответе: {e}")
+
+# --- Установка webhook ---
+def set_webhook():
+    webhook_url = f"{APP_URL}/{TOKEN}"
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    logger.info(f"Webhook установлен: {webhook_url}")
+
+# --- Только для продакшена через gunicorn ---
+set_webhook()
+logger.info("Приложение готово к запуску через gunicorn")
