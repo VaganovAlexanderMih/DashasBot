@@ -1,9 +1,9 @@
 import os
-import json
 import telebot
-from flask import Flask, request
+from flask import Flask
 from datetime import datetime, time as dt_time
 import logging
+import threading
 
 # --- Логгер ---
 logging.basicConfig(
@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 # --- Конфиг ---
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-APP_URL = os.getenv("APP_URL")  # например: https://mybot.onrender.com
 bot = telebot.TeleBot(TOKEN)
 
 MESSAGE_TEXT = "Выпила таблетки?"
@@ -28,7 +27,7 @@ send_hour = 19  # по умолчанию 19:00
 send_minute = 0
 reminder_interval = 30  # минуты по умолчанию
 
-# --- Сохраняем/загружаем chat_id ---
+# --- Сохранение/загрузка chat_id ---
 def save_chat_id(cid):
     with open(chat_file, "w") as f:
         f.write(str(cid))
@@ -42,7 +41,7 @@ def load_chat_id():
 
 chat_id = load_chat_id()
 
-# --- Сохраняем/загружаем время отправки ---
+# --- Сохранение/загрузка времени ---
 def save_send_time(h, m):
     with open(time_file, "w") as f:
         f.write(f"{h:02d}:{m:02d}")
@@ -57,7 +56,7 @@ def load_send_time():
 
 send_hour, send_minute = load_send_time()
 
-# --- Сохраняем/загружаем интервал ---
+# --- Сохранение/загрузка интервала ---
 def save_interval(minutes):
     with open(interval_file, "w") as f:
         f.write(str(minutes))
@@ -76,23 +75,11 @@ app = Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Bot is running with webhook!"
-
-@app.route(f"/{TOKEN}", methods=["POST"])
-def webhook():
-    """Обработка апдейтов от Telegram"""
-    try:
-        update = request.get_json(force=True)
-        if update:
-            bot.process_new_updates([telebot.types.Update.de_json(json.dumps(update))])
-        return "OK", 200
-    except Exception as e:
-        logger.error(f"Ошибка обработки webhook: {e}")
-        return "Error", 500
+    return "Bot is running with polling!"
 
 @app.route("/send_reminder", methods=["GET"])
 def send_reminder():
-    """Эндпоинт для ручной отправки напоминания (например, из UptimeRobot)"""
+    """Эндпоинт для вызова из UptimeRobot каждые N минут"""
     global answered
     if chat_id is None:
         logger.info("chat_id не задан, сообщение не отправлено")
@@ -122,6 +109,7 @@ def start(message):
     answered = False
     save_chat_id(chat_id)
     bot.reply_to(message, f"Бот запущен. chat_id={chat_id}")
+    logger.info(f"Пользователь {chat_id} запустил бота")
 
 @bot.message_handler(commands=['schedule'])
 def schedule(message):
@@ -169,14 +157,12 @@ def handle_reply(message):
     except Exception as e:
         logger.error(f"Ошибка при ответе: {e}")
 
-# --- Установка webhook ---
-def set_webhook():
-    webhook_url = f"{APP_URL}/{TOKEN}"
-    bot.remove_webhook()
-    bot.set_webhook(url=webhook_url)
-    logger.info(f"Webhook установлен: {webhook_url}")
-
+# --- Запуск ---
 if __name__ == "__main__":
-    set_webhook()
+    # Запускаем polling в отдельном потоке
+    threading.Thread(target=lambda: bot.infinity_polling(skip_pending=True), daemon=True).start()
+
+    # Flask для UptimeRobot
     port = int(os.environ.get("PORT", 10000))
     logger.info(f"Запуск Flask на порту {port}")
+    app.run(host="0.0.0.0", port=port)
