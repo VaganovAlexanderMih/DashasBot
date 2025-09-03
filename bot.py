@@ -127,6 +127,7 @@ def reset_answered():
 
 # --- Telegram команды ---
 def start(message):
+    logger.info(message)
     global chat_id, answered
     chat_id = message.chat.id
     answered = False
