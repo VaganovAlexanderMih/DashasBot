@@ -74,7 +74,7 @@ reminder_interval = load_interval()
 # --- Flask ---
 app = Flask(__name__)
 
-@app.route("/", methods=["GET, HEAD"])
+@app.route("/", methods=["GET"])
 def index():
     return "Bot is running with webhook!"
 
