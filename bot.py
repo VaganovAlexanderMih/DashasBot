@@ -95,7 +95,7 @@ def webhook():
         return "Error", 500
 
 
-@app.route("/send_reminder", methods=["GET, HEAD"])
+@app.route("/send_reminder", methods=["GET", "HEAD"])
 def send_reminder():
     global answered
     if chat_id is None:
@@ -118,7 +118,7 @@ def send_reminder():
 
     return "OK", 200
 
-@app.route("/reset_answered", methods=["GET, HEAD"])
+@app.route("/reset_answered", methods=["GET", "HEAD"])
 def reset_answered():
     now = datetime.now()
     if now.time() < dt_time(18, 30) or now.time() > dt_time(send_hour, send_minute):
